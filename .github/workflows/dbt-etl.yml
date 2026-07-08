@@ -41,37 +41,37 @@ jobs:
         run: |
           mkdir -p ~/.dbt
           python - <<'PY'
-          import os, textwrap
+          import os
+          from pathlib import Path
 
-          key = os.environ['SNOWFLAKE_PRIVATE_KEY']
-          profile = textwrap.dedent("""\
-              airbnb:
-                outputs:
-                  dev:
-                    type: snowflake
-                    account: "{account}"
-                    user: "{user}"
-                    role: "{role}"
-                    private_key: |
-                      {key}
-                    private_key_passphrase: "{passphrase}"
-                    database: "{database}"
-                    schema: "{schema}"
-                    warehouse: "{warehouse}"
-                    threads: 1
-              target: dev
-          """).format(
-              account=os.environ['SNOWFLAKE_ACCOUNT'],
-              user=os.environ['SNOWFLAKE_USER'],
-              role=os.environ['SNOWFLAKE_ROLE'],
-              key=textwrap.indent(key, ' ' * 10),
-              passphrase=os.environ['SNOWFLAKE_PRIVATE_KEY_PASSPHRASE'],
-              database=os.environ['SNOWFLAKE_DATABASE'],
-              schema=os.environ['SNOWFLAKE_SCHEMA'],
-              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-          )
-          with open(os.path.expanduser('~/.dbt/profiles.yml'), 'w') as f:
-              f.write(profile)
+          def normalize_secret(value: str) -> str:
+              value = value.replace('\r\n', '\n').replace('\r', '\n')
+              if '\\n' in value and '-----BEGIN ' in value:
+                  value = value.replace('\\n', '\n')
+              return value.strip() + '\n'
+
+          key = normalize_secret(os.environ['SNOWFLAKE_PRIVATE_KEY'])
+          lines = [
+              'airbnb:',
+              '  outputs:',
+              '    dev:',
+              '      type: snowflake',
+              f'      account: "{os.environ["SNOWFLAKE_ACCOUNT"]}"',
+              f'      user: "{os.environ["SNOWFLAKE_USER"]}"',
+              f'      role: "{os.environ["SNOWFLAKE_ROLE"]}"',
+              '      private_key: |',
+          ]
+          lines.extend(f'        {line}' for line in key.splitlines())
+          lines.extend([
+              f'      private_key_passphrase: "{os.environ["SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"]}"',
+              f'      database: "{os.environ["SNOWFLAKE_DATABASE"]}"',
+              f'      schema: "{os.environ["SNOWFLAKE_SCHEMA"]}"',
+              f'      warehouse: "{os.environ["SNOWFLAKE_WAREHOUSE"]}"',
+              '      threads: 1',
+              'target: dev',
+              ''
+          ])
+          Path(Path.home(), '.dbt', 'profiles.yml').write_text('\n'.join(lines))
           PY
 
       - name: Run full dbt ETL
