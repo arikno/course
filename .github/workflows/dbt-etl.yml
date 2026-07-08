@@ -76,9 +76,8 @@ jobs:
 
       - name: Run full dbt ETL
         working-directory: airbnb
-        env:
-          DBT_PROFILES_DIR: ~/.dbt
         run: |
+          export DBT_PROFILES_DIR="$HOME/.dbt"
           dbt deps
           dbt seed
           dbt run
