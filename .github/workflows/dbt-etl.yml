@@ -1,0 +1,70 @@
+name: dbt ETL
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dbt
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dbt-core~=1.11.0 dbt-snowflake~=1.11.0
+
+      - name: Write dbt profile
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+          SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_PASSPHRASE }}
+        run: |
+          mkdir -p ~/.dbt
+          python - <<'PY'
+import os, textwrap
+key = os.environ['SNOWFLAKE_PRIVATE_KEY']
+content = f'''airbnb:
+  outputs:
+    dev:
+      type: snowflake
+      account: "{os.environ['SNOWFLAKE_ACCOUNT']}"
+      user: "{os.environ['SNOWFLAKE_USER']}"
+      role: "{os.environ['SNOWFLAKE_ROLE']}"
+      private_key: |
+{textwrap.indent(key, '        ')}
+      private_key_passphrase: "{os.environ['SNOWFLAKE_PRIVATE_KEY_PASSPHRASE']}"
+      database: "{os.environ['SNOWFLAKE_DATABASE']}"
+      schema: "{os.environ['SNOWFLAKE_SCHEMA']}"
+      warehouse: "{os.environ['SNOWFLAKE_WAREHOUSE']}"
+      threads: 1
+  target: dev
+'''
+open(os.path.expanduser('~/.dbt/profiles.yml'), 'w').write(content)
+PY
+
+      - name: Run full dbt ETL
+        working-directory: airbnb
+        env:
+          DBT_PROFILES_DIR: ~/.dbt
+        run: |
+          dbt seed
+          dbt run
+          dbt test
