@@ -68,7 +68,7 @@ jobs:
               f'      schema: "{os.environ["SNOWFLAKE_SCHEMA"]}"',
               f'      warehouse: "{os.environ["SNOWFLAKE_WAREHOUSE"]}"',
               '      threads: 1',
-              'target: dev',
+              '  target: dev',
               ''
           ])
           Path(Path.home(), '.dbt', 'profiles.yml').write_text('\n'.join(lines))
