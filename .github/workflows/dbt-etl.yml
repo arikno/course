@@ -41,23 +41,44 @@ jobs:
         run: |
           mkdir -p ~/.dbt
           python - <<'PY'
-            import os, textwrap
-            key = os.environ['SNOWFLAKE_PRIVATE_KEY']
-            content = textwrap.dedent(f"""airbnb:
+          import os, textwrap
+
+          key = os.environ['SNOWFLAKE_PRIVATE_KEY']
+          profile = textwrap.dedent("""\
+              airbnb:
                 outputs:
                   dev:
                     type: snowflake
-                    account: "{os.environ['SNOWFLAKE_ACCOUNT']}"
-                    user: "{os.environ['SNOWFLAKE_USER']}"
-                    role: "{os.environ['SNOWFLAKE_ROLE']}"
+                    account: "{account}"
+                    user: "{user}"
+                    role: "{role}"
                     private_key: |
-            {textwrap.indent(key, '        ')}
-                    private_key_passphrase: "{os.environ['SNOWFLAKE_PRIVATE_KEY_PASSPHRASE']}"
-                    database: "{os.environ['SNOWFLAKE_DATABASE']}"
-                    schema: "{os.environ['SNOWFLAKE_SCHEMA']}"
-                    warehouse: "{os.environ['SNOWFLAKE_WAREHOUSE']}"
+                      {key}
+                    private_key_passphrase: "{passphrase}"
+                    database: "{database}"
+                    schema: "{schema}"
+                    warehouse: "{warehouse}"
                     threads: 1
-                target: dev
-            """)
-            open(os.path.expanduser('~/.dbt/profiles.yml'), 'w').write(content)
+              target: dev
+          """).format(
+              account=os.environ['SNOWFLAKE_ACCOUNT'],
+              user=os.environ['SNOWFLAKE_USER'],
+              role=os.environ['SNOWFLAKE_ROLE'],
+              key=textwrap.indent(key, ' ' * 10),
+              passphrase=os.environ['SNOWFLAKE_PRIVATE_KEY_PASSPHRASE'],
+              database=os.environ['SNOWFLAKE_DATABASE'],
+              schema=os.environ['SNOWFLAKE_SCHEMA'],
+              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
+          )
+          with open(os.path.expanduser('~/.dbt/profiles.yml'), 'w') as f:
+              f.write(profile)
           PY
+
+      - name: Run full dbt ETL
+        working-directory: airbnb
+        env:
+          DBT_PROFILES_DIR: ~/.dbt
+        run: |
+          dbt seed
+          dbt run
+          dbt test
